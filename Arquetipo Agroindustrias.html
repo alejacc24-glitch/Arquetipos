@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arquetipo Agroindustria — Venta Directa</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f5f7f5; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; width: 100vw; }
+canvas { display: block; width: 100vw; height: 100vh; }
+#ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+h1 {
+  position: absolute; top: 0px; left: 50%; transform: translateX(-50%);
+  font-size: clamp(1.0rem,2.2vw,1.5rem); font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #1a2e1a;
+  text-shadow: 0 2px 12px rgba(0,120,50,0.15);
+  white-space: nowrap;
+}
+.sub {
+  position: absolute; top: 24px; left: 50%; transform: translateX(-50%);
+  font-size: 0.62rem; letter-spacing: 0.22em; text-transform: uppercase;
+  color: rgba(0,130,60,0.7); white-space: nowrap;
+}
+#leg {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 18px; flex-wrap: nowrap; justify-content: center; white-space: nowrap;
+}
+.li { display: flex; align-items: center; gap: 7px; font-size: 0.68rem; letter-spacing: 0.07em; text-transform: uppercase; color: #333; font-weight: 600; }
+.ld { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+#tip {
+  position: fixed; background: rgba(255,255,255,0.97); border: 1px solid rgba(0,150,70,0.35);
+  color: #222; padding: 10px 15px; border-radius: 10px; font-size: 0.78rem;
+  pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 99; max-width: 240px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+#tip b { display: block; color: #007a35; margin-bottom: 3px; font-size: 0.88rem; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <h1>Arquetipo Agroindustria</h1>
+  <div class="sub">Venta Directa · Sell In / Sell Out</div>
+  <div id="leg"></div>
+</div>
+<div id="tip"></div>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const tip = document.getElementById('tip');
+
+function rgb(co,a=1){ return `rgba(${co[0]},${co[1]},${co[2]},${a})`; }
+
+const TYPES = {
+  proveedor:  { label:'Proveedor',        sublabel:null,           desc:'Fuente de insumos, tecnología y productos agroindustriales', col:[0,150,210],  r:34 },
+  tecnico:    { label:'Agroindustria',    sublabel:'(Técnico)',    desc:'Especialista técnico — Agroindustria de gran escala',        col:[220,80,20],  r:34 },
+  agr_alto:   { label:'Agr. Alto Impacto', sublabel:'(Técnico)',  desc:'Agricultor exportador de alto impacto — atendido directamente por Agroindustria', col:[0,120,50], r:21 },
+  agricultor: { label:'Agricultor',       sublabel:null,           desc:'Agricultor exportador de escala mediana',                    col:[0,170,100],  r:14 },
+};
+
+const RAW = [
+  // Proveedores
+  { type:'proveedor', row:0 },
+  { type:'proveedor', row:0 },
+  { type:'proveedor', row:0 },
+  { type:'proveedor', row:0 },
+  // Agroindustria — 3
+  { type:'tecnico',   row:1 },
+  { type:'tecnico',   row:1 },
+  { type:'tecnico',   row:1 },
+  // Agr. Alto Impacto (Técnico) — 6
+  { type:'agr_alto', row:2 },
+  { type:'agr_alto', row:2 },
+  { type:'agr_alto', row:2 },
+  { type:'agr_alto', row:2 },
+  { type:'agr_alto', row:2 },
+  { type:'agr_alto', row:2 },
+  // Agricultores — 12
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+  { type:'agricultor', row:3 },
+];
+
+let nodes=[], pulses=[], W, H, t=0;
+
+function build(){
+  c.width = W = window.innerWidth;
+  c.height= H = window.innerHeight;
+  nodes=[]; pulses=[];
+
+  const padX = 80;
+  const rowY = { 0: H*0.10, 1: H*0.30, 2: H*0.56, 3: H*0.82 };
+
+  [0,1,2,3].forEach(row=>{
+    const arr = RAW.filter(r=>r.row===row);
+    const n   = arr.length;
+    const y   = rowY[row];
+    const usW = W - padX*2;
+    arr.forEach((r,i)=>{
+      const x = n===1 ? W/2 : padX + (usW/(n-1))*i;
+      nodes.push({
+        x:x, y, ox:x, oy:y,
+        def:TYPES[r.type], row,
+        ph:Math.random()*Math.PI*2,
+        sp:0.14+Math.random()*0.18,
+        hov:false
+      });
+    });
+  });
+
+  // Legend
+  const leg=document.getElementById('leg');
+  leg.innerHTML='';
+  Object.values(TYPES).forEach(d=>{
+    leg.innerHTML+=`<div class="li"><div class="ld" style="background:${rgb(d.col)};box-shadow:0 0 6px ${rgb(d.col,0.7)}"></div>${d.label}${d.sublabel?' '+d.sublabel:''}</div>`;
+  });
+}
+
+function drawBg(){
+  ctx.fillStyle='#f5f7f5';
+  ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(0,120,50,0.06)';
+  ctx.lineWidth=1;
+  for(let x=0;x<W;x+=55){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=55){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+// Build a mapping: for each node in srcs, connect only to a contiguous slice of tgts
+// sorted by x position, so lines never cross.
+function drawEdgePairZoned(srcs, tgts){
+  // Sort both arrays by x position
+  const ss = [...srcs].sort((a,b)=>a.ox-b.ox);
+  const ts = [...tgts].sort((a,b)=>a.ox-b.ox);
+  const sn = ss.length, tn = ts.length;
+
+  // Assign each target to exactly one source (the nearest one by zone)
+  // Map: tgts index -> src index using proportional segments
+  ss.forEach((s, si)=>{
+    // The range of target indices this source "owns"
+    const t0 = Math.round(si * tn / sn);
+    const t1 = Math.round((si+1) * tn / sn);
+    for(let ti=t0; ti<t1; ti++){
+      const m = ts[ti];
+      const hi = s.hov || m.hov;
+      const grad = ctx.createLinearGradient(s.x,s.y,m.x,m.y);
+      grad.addColorStop(0, rgb(s.def.col, hi?0.78:0.30));
+      grad.addColorStop(1, rgb(m.def.col, hi?0.78:0.30));
+      ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(m.x,m.y);
+      ctx.strokeStyle=grad; ctx.lineWidth=hi?2.2:1.0; ctx.stroke();
+    }
+  });
+}
+
+function drawEdges(){
+  const provs    = nodes.filter(n=>n.row===0);
+  const tecs     = nodes.filter(n=>n.row===1);
+  const agr_alto = nodes.filter(n=>n.row===2);
+  const agrs     = nodes.filter(n=>n.row===3);
+  // Proveedores → todas las Agroindustrias (todos con todos)
+  provs.forEach(n=>{ tecs.forEach(m=>{
+    const hi=n.hov||m.hov;
+    const grad=ctx.createLinearGradient(n.x,n.y,m.x,m.y);
+    grad.addColorStop(0,rgb(n.def.col,hi?0.78:0.30));
+    grad.addColorStop(1,rgb(m.def.col,hi?0.78:0.30));
+    ctx.beginPath(); ctx.moveTo(n.x,n.y); ctx.lineTo(m.x,m.y);
+    ctx.strokeStyle=grad; ctx.lineWidth=hi?2.2:1.0; ctx.stroke();
+  });});
+  drawEdgePairZoned(tecs,     agr_alto);
+  drawEdgePairZoned(agr_alto, agrs);
+}
+
+function drawLabel(x, y, text, col){
+  const w=100, h=20;
+  ctx.beginPath();
+  ctx.roundRect(x-w/2, y-h/2, w, h, 10);
+  ctx.fillStyle=rgb(col,0.12);
+  ctx.fill();
+  ctx.strokeStyle=rgb(col,0.4);
+  ctx.lineWidth=1;
+  ctx.stroke();
+  ctx.font='700 10px Segoe UI';
+  ctx.textAlign='center';
+  ctx.textBaseline='middle';
+  ctx.fillStyle=rgb(col,0.9);
+  ctx.fillText(text, x, y);
+}
+
+function drawRowDot(x,y,col){
+  ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fillStyle=rgb(col,0.5); ctx.fill();
+}
+
+function drawAnnotations(){
+  const provs    = nodes.filter(n=>n.row===0);
+  const tecs     = nodes.filter(n=>n.row===1);
+  const altos    = nodes.filter(n=>n.row===2);
+  const agrs     = nodes.filter(n=>n.row===3);
+  if(!provs.length||!tecs.length) return;
+
+  const y0 = provs[0].oy;
+  const y1 = tecs[0].oy;
+  const y2 = altos.length ? altos[0].oy : H*0.56;
+  const y3 = agrs.length  ? agrs[0].oy  : H*0.82;
+
+  drawLabel(W/2 - 70, (y0+y1)/2, 'SELL IN',  [0,150,210]);
+  drawLabel(W/2 + 70, (y0+y1)/2, 'SELL OUT', [220,80,20]);
+
+  const off = 62;
+  ctx.font='600 11px Segoe UI'; ctx.textAlign='left'; ctx.textBaseline='middle';
+
+  drawRowDot(24, y0-off, [0,150,210]);
+  ctx.fillStyle=rgb([0,150,210],0.8);
+  ctx.fillText('PROVEEDORES', 36, y0-off);
+
+  drawRowDot(24, y1-off, [220,80,20]);
+  ctx.fillStyle=rgb([220,80,20],0.8);
+  ctx.fillText('AGROINDUSTRIA — TÉCNICO', 36, y1-off);
+
+  drawRowDot(24, y2-off, [0,120,50]);
+  ctx.fillStyle=rgb([0,120,50],0.8);
+  ctx.fillText('AGR. ALTO IMPACTO (TÉCNICO)', 36, y2-off);
+
+  if(agrs.length){
+    drawRowDot(24, y3-off, [0,170,100]);
+    ctx.fillStyle=rgb([0,170,100],0.8);
+    ctx.fillText('AGRICULTORES', 36, y3-off);
+  }
+}
+
+function drawPulses(){
+  for(let i=pulses.length-1;i>=0;i--){
+    const p=pulses[i];
+    p.t += p.speed;
+    if(p.t>1){pulses.splice(i,1);continue;}
+    const x=p.x0+(p.x1-p.x0)*p.t;
+    const y=p.y0+(p.y1-p.y0)*p.t;
+    const a=Math.sin(p.t*Math.PI);
+    ctx.beginPath();
+    ctx.arc(x,y,5,0,Math.PI*2);
+    ctx.fillStyle=rgb(p.col,a);
+    ctx.shadowBlur=16;
+    ctx.shadowColor=rgb(p.col,0.9);
+    ctx.fill();
+    ctx.shadowBlur=0;
+  }
+}
+
+function drawNodes(){
+  nodes.forEach(n=>{
+    n.x=n.ox+Math.sin(t*n.sp+n.ph)*5;
+    n.y=n.oy+Math.cos(t*n.sp*0.65+n.ph)*3;
+    const r=n.def.r, co=n.def.col;
+
+    const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*3.2);
+    g.addColorStop(0,rgb(co,0.16));
+    g.addColorStop(1,rgb(co,0));
+    ctx.beginPath();
+    ctx.arc(n.x,n.y,r*3.2,0,Math.PI*2);
+    ctx.fillStyle=g;
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    ctx.fillStyle=rgb(co,0.9);
+    ctx.shadowBlur=n.hov?28:12;
+    ctx.shadowColor=rgb(co,0.65);
+    ctx.fill();
+    ctx.shadowBlur=0;
+
+    ctx.beginPath();
+    ctx.arc(n.x-r*0.3,n.y-r*0.3,r*0.38,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.35)';
+    ctx.fill();
+
+    ctx.beginPath();
+    ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    ctx.strokeStyle=n.hov?'#222':rgb(co,0.7);
+    ctx.lineWidth=n.hov?2.5:1.5;
+    ctx.stroke();
+
+    // Label — main + optional sublabel
+    const fs=Math.max(8,r*0.34);
+    ctx.textAlign='center';
+    ctx.textBaseline='middle';
+    ctx.shadowBlur=4;
+    ctx.shadowColor='rgba(0,0,0,0.5)';
+
+    if(n.def.sublabel && n.def.r>=16){
+      // Main label bigger, sublabel smaller below
+      ctx.font=`700 ${fs}px Segoe UI`;
+      ctx.fillStyle='#fff';
+      ctx.fillText(n.def.label, n.x, n.y - fs*0.55);
+      ctx.font=`400 ${Math.max(7,fs*0.78)}px Segoe UI`;
+      ctx.fillStyle='rgba(255,255,255,0.82)';
+      ctx.fillText(n.def.sublabel, n.x, n.y + fs*0.65);
+    } else if(r>=10){
+      ctx.font=`700 ${Math.max(6,r*0.38)}px Segoe UI`;
+      ctx.fillStyle='#fff';
+      ctx.fillText(n.def.label, n.x, n.y);
+    }
+    ctx.shadowBlur=0;
+  });
+}
+
+let lastP=0;
+function spawnPulse(now){
+  if(now-lastP<60) return;  // más frecuente
+  lastP=now;
+
+  // Entre proveedores y agroindustrias: muchos pulsos simultáneos
+  if(Math.random()<0.25){
+    const provs=[...nodes.filter(n=>n.row===0)];
+    const tecs=[...nodes.filter(n=>n.row===1)];
+    if(!provs.length||!tecs.length) return;
+    // Dispara un pulso desde un proveedor aleatorio hacia una agroindustria aleatoria (todos con todos)
+    const s=provs[Math.floor(Math.random()*provs.length)];
+    const g=tecs[Math.floor(Math.random()*tecs.length)];
+    pulses.push({x0:s.x,y0:s.y,x1:g.x,y1:g.y,t:0,col:s.def.col,speed:0.004});
+    // A veces lanza un segundo pulso simultáneo prov→tec
+    if(Math.random()<0.2){
+      const s2=provs[Math.floor(Math.random()*provs.length)];
+      const g2=tecs[Math.floor(Math.random()*tecs.length)];
+      pulses.push({x0:s2.x,y0:s2.y,x1:g2.x,y1:g2.y,t:Math.random()*0.15,col:s2.def.col,speed:0.004});
+    }
+    return;
+  }
+
+  // Resto de capas: zoned
+  const chains=[[1,2],[1,2],[2,3],[2,3],[2,3]];
+  const pick=chains[Math.floor(Math.random()*chains.length)];
+  const srcs=[...nodes.filter(n=>n.row===pick[0])].sort((a,b)=>a.ox-b.ox);
+  const tgts=[...nodes.filter(n=>n.row===pick[1])].sort((a,b)=>a.ox-b.ox);
+  if(!srcs.length||!tgts.length) return;
+  const sn=srcs.length, tn=tgts.length;
+  const si=Math.floor(Math.random()*sn);
+  const s=srcs[si];
+  const t0=Math.round(si*tn/sn), t1=Math.round((si+1)*tn/sn);
+  if(t0>=t1) return;
+  const ti=t0+Math.floor(Math.random()*(t1-t0));
+  const g=tgts[ti];
+  // row 1->2: velocidad media, row 2->3: más lento
+  const spd = pick[0]===1 ? 0.009 : 0.006;
+  pulses.push({x0:s.x,y0:s.y,x1:g.x,y1:g.y,t:0,col:s.def.col,speed:spd});
+}
+
+c.addEventListener('mousemove',e=>{
+  const mx=e.clientX,my=e.clientY;
+  let hov=null;
+  nodes.forEach(n=>{
+    n.hov=Math.hypot(n.x-mx,n.y-my)<n.def.r+10;
+    if(n.hov) hov=n;
+  });
+  if(hov){
+    tip.style.opacity='1';
+    tip.style.left=(e.clientX+18)+'px';
+    tip.style.top=(e.clientY-10)+'px';
+    tip.innerHTML=`<b>${hov.def.label}</b>${hov.def.desc}`;
+    c.style.cursor='pointer';
+  } else {
+    tip.style.opacity='0';
+    c.style.cursor='default';
+  }
+});
+c.addEventListener('mouseleave',()=>{nodes.forEach(n=>n.hov=false);tip.style.opacity='0';});
+
+function loop(now){
+  requestAnimationFrame(loop);
+  t+=0.012;
+  drawBg();
+  drawAnnotations();
+  drawEdges();
+  drawPulses();
+  drawNodes();
+  spawnPulse(now);
+}
+
+window.addEventListener('resize',build);
+build();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>

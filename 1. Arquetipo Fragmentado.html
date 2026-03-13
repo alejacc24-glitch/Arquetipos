@@ -1,0 +1,341 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Arquetipo Fragmentado</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f5f7f5; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; width: 100vw; }
+canvas { display: block; width: 100vw; height: 100vh; }
+#ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+h1 {
+  position: absolute; top: 10px; left: 50%; transform: translateX(-50%);
+  font-size: clamp(1.0rem,2.2vw,1.5rem); font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #1a2e1a;
+  text-shadow: 0 2px 12px rgba(0,120,50,0.15);
+  white-space: nowrap;
+}
+.sub {
+  position: absolute; top: 38px; left: 50%; transform: translateX(-50%);
+  font-size: 0.62rem; letter-spacing: 0.22em; text-transform: uppercase;
+  color: rgba(0,130,60,0.7); white-space: nowrap;
+}
+#leg {
+  position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%);
+  display: flex; gap: 18px; flex-wrap: nowrap; justify-content: center; white-space: nowrap;
+}
+.li { display: flex; align-items: center; gap: 7px; font-size: 0.66rem; letter-spacing: 0.07em; text-transform: uppercase; color: #333; font-weight: 600; }
+.ld { width: 12px; height: 12px; border-radius: 50%; flex-shrink: 0; }
+#tip {
+  position: fixed; background: rgba(255,255,255,0.97); border: 1px solid rgba(0,150,70,0.35);
+  color: #222; padding: 10px 15px; border-radius: 10px; font-size: 0.78rem;
+  pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 99; max-width: 250px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+#tip b { display: block; color: #007a35; margin-bottom: 3px; font-size: 0.88rem; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <h1>Arquetipo Fragmentado — Dos pasos o más</h1>
+  <div class="sub">2 Caminos · Sell In → Sell Out</div>
+  <div id="leg"></div>
+</div>
+<div id="tip"></div>
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const tip = document.getElementById('tip');
+
+function rgb(co,a=1){ return `rgba(${co[0]},${co[1]},${co[2]},${a})`; }
+
+const TYPES = {
+  proveedor:    { label:'Proveedor',         sublabel:null,           desc:'Fuente de insumos y productos agrícolas',                     col:[0,150,210],  r:26 },
+  distribuidor: { label:'Distribuidor',       sublabel:null,           desc:'Canal de distribución regional — Sell In / Sell Out',         col:[120,50,220], r:22 },
+  dealer:       { label:'Dealer',             sublabel:'(más común)',  desc:'Comercializador local — atiende su grupo exclusivo de agricultores', col:[220,80,20], r:21 },
+  agr_alto:     { label:'Agr. Alto Impacto', sublabel:'(Técnico)',    desc:'Agricultor de Alto Impacto — camino menos común',             col:[0,120,50],   r:21 },
+  agr_tec:      { label:'Agricultor',         sublabel:null,           desc:'Agricultor atendido exclusivamente por su Dealer',            col:[0,170,70],   r:13 },
+};
+
+const RAW = [
+  { type:'proveedor',    path:0, row:0 },
+  { type:'proveedor',    path:0, row:0 },
+  { type:'proveedor',    path:0, row:0 },
+  { type:'proveedor',    path:0, row:0 },
+
+  { type:'distribuidor', path:0, row:1 },
+  { type:'distribuidor', path:0, row:1 },
+  { type:'distribuidor', path:0, row:1 },
+  { type:'distribuidor', path:0, row:1 },
+  { type:'distribuidor', path:0, row:1 },
+
+  // Dealers — camino 1
+  { type:'dealer', path:1, row:2 },
+  { type:'dealer', path:1, row:2 },
+  { type:'dealer', path:1, row:2 },
+  { type:'dealer', path:1, row:2 },
+  { type:'dealer', path:1, row:2 },
+  { type:'dealer', path:1, row:2 },
+
+  // Agricultores — ancho completo
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+  { type:'agr_tec', path:0, row:3 },
+
+
+  // Agr. Alto Impacto — solo 3
+  { type:'agr_alto', path:2, row:2 },
+  { type:'agr_alto', path:2, row:2 },
+  { type:'agr_alto', path:2, row:2 },
+];
+
+let nodes=[], pulses=[], W, H, t=0;
+
+function build(){
+  c.width = W = window.innerWidth;
+  c.height= H = window.innerHeight;
+  nodes=[]; pulses=[];
+
+  const padX=70, splitX=W*0.62;
+  const rowY={ 0:H*0.14, 1:H*0.36, 2:H*0.60, 3:H*0.86 };
+
+  const groups={};
+  RAW.forEach(r=>{ const k=`${r.row}_${r.path}`; if(!groups[k]) groups[k]=[]; groups[k].push(r); });
+
+  Object.entries(groups).forEach(([key,arr])=>{
+    const [rowS,pathS]=key.split('_');
+    const row=parseInt(rowS), path=parseInt(pathS), n=arr.length, y=rowY[row];
+    let xStart,xEnd;
+    if(path===0){xStart=padX;xEnd=W-padX;}
+    else if(path===1){xStart=padX;xEnd=splitX-55;}
+    else{xStart=splitX+55;xEnd=W-padX;}
+    const usW=xEnd-xStart;
+    arr.forEach((r,i)=>{
+      const x=n===1?(xStart+xEnd)/2:xStart+(usW/(n-1))*i;
+      nodes.push({ x:x+(Math.random()-0.5)*10, y, ox:x+(Math.random()-0.5)*10, oy:y,
+        def:TYPES[r.type], path, row, ph:Math.random()*Math.PI*2, sp:0.28+Math.random()*0.35, hov:false });
+    });
+  });
+
+  const leg=document.getElementById('leg');
+  leg.innerHTML='';
+  Object.values(TYPES).forEach(d=>{
+    leg.innerHTML+=`<div class="li"><div class="ld" style="background:${rgb(d.col)};box-shadow:0 0 6px ${rgb(d.col,0.7)}"></div>${d.label}${d.sublabel?' '+d.sublabel:''}</div>`;
+  });
+}
+
+function drawBg(){
+  ctx.fillStyle='#f5f7f5'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(0,120,50,0.06)'; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=55){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=55){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function drawEdgePair(srcs,tgts){
+  srcs.forEach(n=>{ tgts.forEach(m=>{
+    const hi=n.hov||m.hov;
+    const grad=ctx.createLinearGradient(n.x,n.y,m.x,m.y);
+    grad.addColorStop(0,rgb(n.def.col,hi?0.78:0.30));
+    grad.addColorStop(1,rgb(m.def.col,hi?0.78:0.30));
+    ctx.beginPath(); ctx.moveTo(n.x,n.y); ctx.lineTo(m.x,m.y);
+    ctx.strokeStyle=grad; ctx.lineWidth=hi?2.2:1.0; ctx.stroke();
+  });});
+}
+
+function drawEdges(){
+  const provs   = nodes.filter(n=>n.def===TYPES.proveedor);
+  const dists   = nodes.filter(n=>n.def===TYPES.distribuidor);
+  const dealers = nodes.filter(n=>n.def===TYPES.dealer);
+  const agrtec  = nodes.filter(n=>n.def===TYPES.agr_tec);
+  const agralto = nodes.filter(n=>n.def===TYPES.agr_alto);
+
+  drawEdgePair(provs, dists);
+  drawEdgePair(dists, dealers);
+
+  // Exclusividad: cada agricultor → solo su dealer
+  const nd=dealers.length;
+  agrtec.forEach((agr,ai)=>{
+    const dealer=dealers[ai%nd];
+    const hi=dealer.hov||agr.hov;
+    const grad=ctx.createLinearGradient(dealer.x,dealer.y,agr.x,agr.y);
+    grad.addColorStop(0,rgb(dealer.def.col,hi?0.78:0.28));
+    grad.addColorStop(1,rgb(agr.def.col,hi?0.78:0.28));
+    ctx.beginPath(); ctx.moveTo(dealer.x,dealer.y); ctx.lineTo(agr.x,agr.y);
+    ctx.strokeStyle=grad; ctx.lineWidth=hi?2.2:0.9; ctx.stroke();
+  });
+
+  drawEdgePair(dists, agralto);
+}
+
+function drawPill(x,y,text,col,w){
+  w=w||92; const h=20;
+  ctx.beginPath(); ctx.roundRect(x-w/2,y-h/2,w,h,10);
+  ctx.fillStyle=rgb(col,0.11); ctx.fill();
+  ctx.strokeStyle=rgb(col,0.38); ctx.lineWidth=1; ctx.stroke();
+  ctx.font='700 9.5px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle=rgb(col,0.9); ctx.fillText(text,x,y);
+}
+
+function drawRowDot(x,y,col){
+  ctx.beginPath(); ctx.arc(x,y,5,0,Math.PI*2); ctx.fillStyle=rgb(col,0.5); ctx.fill();
+}
+
+function drawAnnotations(){
+  const provs=nodes.filter(n=>n.row===0), dists=nodes.filter(n=>n.row===1);
+  const mid2=nodes.filter(n=>n.row===2),  bot=nodes.filter(n=>n.row===3);
+  if(!provs.length||!dists.length||!mid2.length) return;
+
+  const y0=provs[0].oy, y1=dists[0].oy, y2=mid2[0].oy, y3=bot.length?bot[0].oy:H*0.82;
+  const splitX=W*0.62;
+
+  drawPill(W/2,(y0+y1)/2,'SELL IN',[0,150,210],90);
+  drawPill(W/2,(y1+y2)/2,'SELL OUT',[120,50,220],90);
+
+  ctx.beginPath(); ctx.setLineDash([5,7]);
+  ctx.moveTo(splitX,y1+38); ctx.lineTo(splitX,y3+20);
+  ctx.strokeStyle='rgba(0,0,0,0.1)'; ctx.lineWidth=1.5; ctx.stroke();
+  ctx.setLineDash([]);
+
+  const midC1=splitX/2, midC2=splitX+(W-splitX)/2, labelY=(y1+y2)/2+22;
+  ctx.textAlign='center';
+  ctx.font='700 11px Segoe UI'; ctx.fillStyle='rgba(220,80,20,0.8)';
+  ctx.fillText('CAMINO 1 — más común', midC1, labelY);
+  ctx.font='600 10px Segoe UI'; ctx.fillStyle='rgba(220,80,20,0.55)';
+  ctx.fillText('Dist → Dealer → Agricultor', midC1, labelY+15);
+
+  ctx.font='700 11px Segoe UI'; ctx.fillStyle='rgba(0,120,50,0.8)';
+  ctx.fillText('CAMINO 2 — menos común', midC2, labelY);
+  ctx.font='600 10px Segoe UI'; ctx.fillStyle='rgba(0,120,50,0.55)';
+  ctx.fillText('Dist → Agr. Alto Impacto', midC2, labelY+15);
+
+  const off=46;
+  ctx.font='600 11px Segoe UI'; ctx.textAlign='left'; ctx.textBaseline='middle';
+  drawRowDot(24,y0-off,[0,150,210]); ctx.fillStyle=rgb([0,150,210],0.8); ctx.fillText('PROVEEDORES',36,y0-off);
+  drawRowDot(24,y1-off,[120,50,220]); ctx.fillStyle=rgb([120,50,220],0.8); ctx.fillText('DISTRIBUIDORES',36,y1-off);
+  drawRowDot(24,y2-off,[180,60,0]); ctx.fillStyle='rgba(180,60,0,0.8)'; ctx.fillText('DEALERS  /  AGR. ALTO IMPACTO',36,y2-off);
+  if(bot.length){ drawRowDot(24,y3-off,[0,140,60]); ctx.fillStyle='rgba(0,140,60,0.8)'; ctx.fillText('AGRICULTORES (medio a bajo nivel tecnológico)',36,y3-off); }
+}
+
+function drawPulses(){
+  for(let i=pulses.length-1;i>=0;i--){
+    const p=pulses[i]; p.t+=0.013;
+    if(p.t>1){pulses.splice(i,1);continue;}
+    const x=p.x0+(p.x1-p.x0)*p.t, y=p.y0+(p.y1-p.y0)*p.t, a=Math.sin(p.t*Math.PI);
+    ctx.beginPath(); ctx.arc(x,y,4.5,0,Math.PI*2);
+    ctx.fillStyle=rgb(p.col,a); ctx.shadowBlur=15; ctx.shadowColor=rgb(p.col,0.9);
+    ctx.fill(); ctx.shadowBlur=0;
+  }
+}
+
+function drawNodes(){
+  nodes.forEach(n=>{
+    n.x=n.ox+Math.sin(t*n.sp+n.ph)*4.5;
+    n.y=n.oy+Math.cos(t*n.sp*0.65+n.ph)*2.5;
+    const r=n.def.r, co=n.def.col;
+
+    const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*3.2);
+    g.addColorStop(0,rgb(co,0.16)); g.addColorStop(1,rgb(co,0));
+    ctx.beginPath(); ctx.arc(n.x,n.y,r*3.2,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+
+    ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    ctx.fillStyle=rgb(co,0.9); ctx.shadowBlur=n.hov?28:12; ctx.shadowColor=rgb(co,0.65);
+    ctx.fill(); ctx.shadowBlur=0;
+
+    ctx.beginPath(); ctx.arc(n.x-r*0.3,n.y-r*0.3,r*0.38,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.35)'; ctx.fill();
+
+    ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    ctx.strokeStyle=n.hov?'#222':rgb(co,0.7); ctx.lineWidth=n.hov?2.5:1.5; ctx.stroke();
+
+    const fs=Math.max(6,r*0.38);
+    ctx.textAlign='center'; ctx.textBaseline='middle';
+    ctx.shadowBlur=4; ctx.shadowColor='rgba(0,0,0,0.5)';
+    if(n.def.sublabel && r>=16){
+      ctx.font=`700 ${fs}px Segoe UI`; ctx.fillStyle='#fff';
+      ctx.fillText(n.def.label, n.x, n.y-fs*0.58);
+      ctx.font=`400 ${Math.max(5,fs*0.72)}px Segoe UI`; ctx.fillStyle='rgba(255,255,255,0.80)';
+      ctx.fillText(n.def.sublabel, n.x, n.y+fs*0.68);
+    } else if(r>=10){
+      ctx.font=`700 ${fs}px Segoe UI`; ctx.fillStyle='#fff';
+      ctx.fillText(n.def.label, n.x, n.y);
+    }
+    ctx.shadowBlur=0;
+  });
+}
+
+let lastP=0;
+function spawnPulse(now){
+  if(now-lastP<175) return; lastP=now;
+  const dealers=nodes.filter(n=>n.def===TYPES.dealer);
+  const agrtec=nodes.filter(n=>n.def===TYPES.agr_tec);
+  const chains=[
+    [TYPES.proveedor,TYPES.distribuidor],
+    [TYPES.distribuidor,TYPES.dealer],
+    [TYPES.distribuidor,TYPES.dealer],
+    [TYPES.distribuidor,TYPES.dealer],
+    'dealer_agr','dealer_agr','dealer_agr',
+    [TYPES.distribuidor,TYPES.agr_alto],
+  ];
+  const pick=chains[Math.floor(Math.random()*chains.length)];
+  if(pick==='dealer_agr'){
+    if(!dealers.length||!agrtec.length) return;
+    const di=Math.floor(Math.random()*dealers.length);
+    const s=dealers[di];
+    const myFarmers=agrtec.filter((_,ai)=>ai%dealers.length===di);
+    if(!myFarmers.length) return;
+    const g=myFarmers[Math.floor(Math.random()*myFarmers.length)];
+    pulses.push({x0:s.x,y0:s.y,x1:g.x,y1:g.y,t:0,col:s.def.col});
+  } else {
+    const srcs=nodes.filter(n=>n.def===pick[0]), tgts=nodes.filter(n=>n.def===pick[1]);
+    if(!srcs.length||!tgts.length) return;
+    const s=srcs[Math.floor(Math.random()*srcs.length)];
+    const g=tgts[Math.floor(Math.random()*tgts.length)];
+    pulses.push({x0:s.x,y0:s.y,x1:g.x,y1:g.y,t:0,col:s.def.col});
+  }
+}
+
+c.addEventListener('mousemove',e=>{
+  const mx=e.clientX,my=e.clientY; let hov=null;
+  nodes.forEach(n=>{ n.hov=Math.hypot(n.x-mx,n.y-my)<n.def.r+10; if(n.hov) hov=n; });
+  if(hov){
+    tip.style.opacity='1'; tip.style.left=(e.clientX+18)+'px'; tip.style.top=(e.clientY-10)+'px';
+    tip.innerHTML=`<b>${hov.def.label}${hov.def.sublabel?' '+hov.def.sublabel:''}</b>${hov.def.desc}`;
+    c.style.cursor='pointer';
+  } else { tip.style.opacity='0'; c.style.cursor='default'; }
+});
+c.addEventListener('mouseleave',()=>{nodes.forEach(n=>n.hov=false);tip.style.opacity='0';});
+
+function loop(now){
+  requestAnimationFrame(loop); t+=0.012;
+  drawBg(); drawAnnotations(); drawEdges(); drawPulses(); drawNodes(); spawnPulse(now);
+}
+
+window.addEventListener('resize',build);
+build();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
