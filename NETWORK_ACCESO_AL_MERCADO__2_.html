@@ -1,0 +1,338 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Network de Suministro de Agroquímicos</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+body { background: #f5f7f5; font-family: 'Segoe UI', sans-serif; overflow: hidden; height: 100vh; width: 100vw; }
+canvas { display: block; width: 100vw; height: 100vh; }
+#ui { position: fixed; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+h1 {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  font-size: clamp(1.1rem,2.4vw,2rem); font-weight: 800; letter-spacing: 0.09em;
+  text-transform: uppercase; color: #1a2e1a;
+  text-shadow: 0 2px 16px rgba(0,120,50,0.15);
+  white-space: nowrap; text-align: center; z-index: 10;
+}
+.sub {
+  position: absolute; top: 46px; left: 50%; transform: translateX(-50%);
+  font-size: 0.68rem; letter-spacing: 0.26em; text-transform: uppercase;
+  color: rgba(0,130,60,0.65); white-space: nowrap; z-index: 10;
+}
+#counter { position: absolute; bottom: 46px; right: 44px; text-align: right; }
+#counter .num { font-size: 2.8rem; font-weight: 800; color: rgba(0,150,60,0.8); line-height: 1; }
+#counter .lbl { font-size: 0.6rem; letter-spacing: 0.22em; text-transform: uppercase; color: rgba(0,0,0,0.35); margin-top: 2px; }
+#leg { position: absolute; bottom: 16px; left: 50%; transform: translateX(-50%); display: flex; gap: 14px; flex-wrap: wrap; justify-content: center; }
+.li { display: flex; align-items: center; gap: 6px; font-size: 0.61rem; letter-spacing: 0.06em; text-transform: uppercase; color: #444; font-weight: 600; }
+.ld { width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0; }
+#tip {
+  position: fixed; background: rgba(255,255,255,0.97); border: 1px solid rgba(0,150,70,0.3);
+  color: #222; padding: 10px 15px; border-radius: 10px; font-size: 0.78rem;
+  pointer-events: none; opacity: 0; transition: opacity 0.15s; z-index: 99; max-width: 240px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+}
+#tip b { display: block; color: #007a35; margin-bottom: 3px; font-size: 0.9rem; }
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="ui">
+  <h1>Network de Suministro de Agroquímicos a Agricultores</h1>
+  <div class="sub">Ecosistema completo de distribución agrícola</div>
+  <div id="counter">
+    <div class="num" id="cnum">0</div>
+    <div class="lbl">agricultores atendidos</div>
+  </div>
+  <div id="leg"></div>
+</div>
+<div id="tip"></div>
+
+<script>
+const c = document.getElementById('c');
+const ctx = c.getContext('2d');
+const tip = document.getElementById('tip');
+function rgb(co,a=1){ return `rgba(${co[0]},${co[1]},${co[2]},${a})`; }
+
+const T = {
+  prov:   { label:'Proveedor',          sublabel:null,          desc:'Origen de insumos, tecnología y conocimiento agroquímico',       col:[0,150,210],  r:28 },
+  agro:   { label:'Agroindustria',      sublabel:null,          desc:'Gran consumidor — depende directamente del Proveedor',           col:[0,100,190],  r:24 },
+  dist:   { label:'Distribuidor',       sublabel:null,          desc:'Canal de distribución regional — Sell In / Sell Out',            col:[120,50,220], r:22 },
+  asesor: { label:'Asesor',            sublabel:'(Técnico)',   desc:'Asesores técnicos especializados de campo',                     col:[200,155,0],  r:19 },
+  alto:   { label:'Agr. Alto Impacto', sublabel:null,          desc:'Agricultores líderes — conectados con Asesores y Distribuidores',col:[0,170,70],   r:20 },
+  dealer: { label:'Dealer',            sublabel:'(más común)', desc:'Comercializadores locales — atienden grupo exclusivo de agric.', col:[220,80,20],  r:19 },
+  agr:    { label:'Agricultor',        sublabel:null,          desc:'Mercado final — millones de familias agrícolas',                 col:[60,160,70],  r:10 },
+};
+
+let nodes=[], pulses=[], W, H, t=0;
+let displayCount=0;
+const TARGET = 4600000;
+
+function placeRow(specs, rowY, padX){
+  specs.forEach(s=>{
+    const xStart = padX + s.xFrac0 * (W - padX*2);
+    const xEnd   = padX + s.xFrac1 * (W - padX*2);
+    const n = s.count;
+    for(let i=0;i<n;i++){
+      const x = n===1 ? (xStart+xEnd)/2 : xStart + (xEnd-xStart)/(n-1)*i;
+      nodes.push({
+        x, y:rowY, ox:x, oy:rowY,
+        def: T[s.type], row:s.row,
+        ph:Math.random()*Math.PI*2,
+        sp:0.25+Math.random()*0.35,
+        hov:false
+      });
+    }
+  });
+}
+
+function build(){
+  c.width=W=window.innerWidth;
+  c.height=H=window.innerHeight;
+  nodes=[]; pulses=[];
+
+  const padX = 55;
+  // 5 filas con espacio para el título (~65px)
+  const rowY = {
+    0: H * 0.14,   // Proveedores
+    1: H * 0.28,   // Agroindustria + Distribuidores
+    2: H * 0.44,   // Asesores (nueva fila)
+    3: H * 0.62,   // Alto Impacto + Dealers
+    4: H * 0.82,   // Agricultores
+  };
+
+  // Row 0 — 4 Proveedores
+  placeRow([{ type:'prov', row:0, xFrac0:0.05, xFrac1:0.95, count:4 }], rowY[0], padX);
+
+  // Row 1 — 2 Agroindustrias | 5 Distribuidores
+  placeRow([
+    { type:'agro', row:1, xFrac0:0.02, xFrac1:0.20, count:2 },
+    { type:'dist', row:1, xFrac0:0.28, xFrac1:0.98, count:5 },
+  ], rowY[1], padX);
+
+  // Row 2 — 4 Asesores (centrados)
+  placeRow([
+    { type:'asesor', row:2, xFrac0:0.10, xFrac1:0.90, count:4 },
+  ], rowY[2], padX);
+
+  // Row 3 — 3 Alto Impacto (izq) | 4 Dealers (der)
+  placeRow([
+    { type:'alto',   row:3, xFrac0:0.01, xFrac1:0.28, count:3 },
+    { type:'dealer', row:3, xFrac0:0.38, xFrac1:0.98, count:4 },
+  ], rowY[3], padX);
+
+  // Row 4 — 20 Agricultores
+  placeRow([{ type:'agr', row:4, xFrac0:0.01, xFrac1:0.99, count:20 }], rowY[4], padX);
+
+  const leg=document.getElementById('leg');
+  leg.innerHTML='';
+  Object.values(T).forEach(d=>{
+    leg.innerHTML+=`<div class="li"><div class="ld" style="background:${rgb(d.col)};box-shadow:0 0 5px ${rgb(d.col,0.7)}"></div>${d.label}${d.sublabel?' '+d.sublabel:''}</div>`;
+  });
+}
+
+function byType(tp){ return nodes.filter(n=>n.def===T[tp]); }
+
+function drawBg(){
+  ctx.fillStyle='#f5f7f5'; ctx.fillRect(0,0,W,H);
+  ctx.strokeStyle='rgba(0,120,50,0.05)'; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=55){ctx.beginPath();ctx.moveTo(x,0);ctx.lineTo(x,H);ctx.stroke();}
+  for(let y=0;y<H;y+=55){ctx.beginPath();ctx.moveTo(0,y);ctx.lineTo(W,y);ctx.stroke();}
+}
+
+function ln(n,m){
+  const hi=n.hov||m.hov;
+  const grad=ctx.createLinearGradient(n.x,n.y,m.x,m.y);
+  grad.addColorStop(0,rgb(n.def.col,hi?0.72:0.22));
+  grad.addColorStop(1,rgb(m.def.col,hi?0.72:0.22));
+  ctx.beginPath(); ctx.moveTo(n.x,n.y); ctx.lineTo(m.x,m.y);
+  ctx.strokeStyle=grad; ctx.lineWidth=hi?2:0.8; ctx.stroke();
+}
+
+function drawEdges(){
+  const provs   = byType('prov');
+  const agros   = byType('agro');
+  const dists   = byType('dist');
+  const asesors = byType('asesor');
+  const altos   = byType('alto');
+  const dealers = byType('dealer');
+  const agrs    = byType('agr');
+
+  // Proveedores → Agroindustria y Distribuidores
+  provs.forEach(n=>{ agros.forEach(m=>ln(n,m)); dists.forEach(m=>ln(n,m)); });
+
+  // Distribuidores → Asesores
+  dists.forEach(n=>{ asesors.forEach(m=>ln(n,m)); });
+
+  // Distribuidores → Dealers
+  dists.forEach(n=>{ dealers.forEach(m=>ln(n,m)); });
+
+  // Asesores → Alto Impacto
+  asesors.forEach(n=>{ altos.forEach(m=>ln(n,m)); });
+
+  // Distribuidores → Agricultores (2 conexiones por distribuidor, rotando cada 3 seg)
+  const slot = Math.floor(t / 3);
+  dists.forEach((d, di) => {
+    const offset = (slot + di * 3) % agrs.length;
+    const a1 = agrs[offset % agrs.length];
+    const a2 = agrs[(offset + 4) % agrs.length];
+    ln(d, a1); ln(d, a2);
+  });
+
+  // Dealers → Agricultores (2 conexiones por dealer, rotando)
+  const nd = dealers.length;
+  dealers.forEach((d, di) => {
+    const offset = (slot * 2 + di * 5) % agrs.length;
+    const a1 = agrs[offset % agrs.length];
+    const a2 = agrs[(offset + 3) % agrs.length];
+    ln(d, a1); ln(d, a2);
+  });
+
+  // Asesores → Agricultores (2 conexiones por asesor, rotando)
+  asesors.forEach((a, ai) => {
+    const offset = (slot * 2 + ai * 7) % agrs.length;
+    const a1 = agrs[offset % agrs.length];
+    const a2 = agrs[(offset + 5) % agrs.length];
+    ln(a, a1); ln(a, a2);
+  });
+}
+
+function drawPulses(){
+  for(let i=pulses.length-1;i>=0;i--){
+    const p=pulses[i]; p.t+=0.013;
+    if(p.t>1){pulses.splice(i,1);continue;}
+    const x=p.x0+(p.x1-p.x0)*p.t, y=p.y0+(p.y1-p.y0)*p.t, a=Math.sin(p.t*Math.PI);
+    ctx.beginPath(); ctx.arc(x,y,4,0,Math.PI*2);
+    ctx.fillStyle=rgb(p.col,a); ctx.shadowBlur=13; ctx.shadowColor=rgb(p.col,0.85);
+    ctx.fill(); ctx.shadowBlur=0;
+  }
+}
+
+function drawPill(x,y,text,col,w){
+  w=w||90; const h=20;
+  ctx.beginPath(); ctx.roundRect(x-w/2,y-h/2,w,h,10);
+  ctx.fillStyle=rgb(col,0.11); ctx.fill();
+  ctx.strokeStyle=rgb(col,0.38); ctx.lineWidth=1; ctx.stroke();
+  ctx.font='700 9.5px Segoe UI'; ctx.textAlign='center'; ctx.textBaseline='middle';
+  ctx.fillStyle=rgb(col,0.9); ctx.fillText(text,x,y);
+}
+
+function drawSellLabels(){
+  const r0=nodes.filter(n=>n.row===0);
+  const r1=nodes.filter(n=>n.row===1);
+  const r2=nodes.filter(n=>n.row===2);
+  if(!r0.length||!r1.length||!r2.length) return;
+  drawPill(W/2, (r0[0].oy+r1[0].oy)/2, 'SELL IN',  [0,150,210],  90);
+  drawPill(W/2, r2[0].oy + 30, 'SELL OUT', [120,50,220], 92);
+}
+
+function drawRowLabels(){
+  const rows=[
+    { row:0, label:'PROVEEDORES',                          col:[0,150,210]  },
+    { row:1, label:'AGROINDUSTRIA  ·  DISTRIBUIDORES',     col:[80,60,200]  },
+    { row:2, label:'ASESORES TÉCNICOS',                    col:[200,155,0]  },
+    { row:3, label:'AGR. ALTO IMPACTO  ·  DEALERS',        col:[180,90,0]   },
+    { row:4, label:'AGRICULTORES',                         col:[0,140,60]   },
+  ];
+  rows.forEach(r=>{
+    const layerNodes=nodes.filter(n=>n.row===r.row);
+    if(!layerNodes.length) return;
+    const y=layerNodes[0].oy - 34;
+    ctx.beginPath(); ctx.arc(22,y,4,0,Math.PI*2); ctx.fillStyle=rgb(r.col,0.55); ctx.fill();
+    ctx.font='600 10px Segoe UI'; ctx.textAlign='left'; ctx.textBaseline='middle';
+    ctx.fillStyle=rgb(r.col,0.78); ctx.fillText(r.label, 32, y);
+  });
+}
+
+function drawNodes(){
+  nodes.forEach(n=>{
+    n.x=n.ox+Math.sin(t*n.sp+n.ph)*4;
+    n.y=n.oy+Math.cos(t*n.sp*0.65+n.ph)*2.5;
+    const r=n.def.r, co=n.def.col;
+
+    const g=ctx.createRadialGradient(n.x,n.y,0,n.x,n.y,r*3);
+    g.addColorStop(0,rgb(co,0.14)); g.addColorStop(1,rgb(co,0));
+    ctx.beginPath(); ctx.arc(n.x,n.y,r*3,0,Math.PI*2); ctx.fillStyle=g; ctx.fill();
+
+    ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    ctx.fillStyle=rgb(co,0.88); ctx.shadowBlur=n.hov?28:11; ctx.shadowColor=rgb(co,0.7);
+    ctx.fill(); ctx.shadowBlur=0;
+
+    ctx.beginPath(); ctx.arc(n.x-r*0.28,n.y-r*0.28,r*0.35,0,Math.PI*2);
+    ctx.fillStyle='rgba(255,255,255,0.28)'; ctx.fill();
+
+    ctx.beginPath(); ctx.arc(n.x,n.y,r,0,Math.PI*2);
+    ctx.strokeStyle=n.hov?'#333':rgb(co,0.62); ctx.lineWidth=n.hov?2.5:1.3; ctx.stroke();
+
+    if(r>=17){
+      const fs=Math.max(7,r*0.33);
+      ctx.textAlign='center'; ctx.textBaseline='middle';
+      ctx.shadowBlur=4; ctx.shadowColor='rgba(0,0,0,0.5)';
+      if(n.def.sublabel){
+        ctx.font=`700 ${fs}px Segoe UI`; ctx.fillStyle='#fff';
+        ctx.fillText(n.def.label, n.x, n.y-fs*0.55);
+        ctx.font=`400 ${Math.max(5,fs*0.7)}px Segoe UI`; ctx.fillStyle='rgba(255,255,255,0.8)';
+        ctx.fillText(n.def.sublabel, n.x, n.y+fs*0.65);
+      } else {
+        ctx.font=`700 ${fs}px Segoe UI`; ctx.fillStyle='#fff';
+        ctx.fillText(n.def.label.split(' ')[0], n.x, n.y);
+      }
+      ctx.shadowBlur=0;
+    }
+  });
+}
+
+function updateCounter(){
+  if(displayCount<TARGET){
+    displayCount=Math.min(TARGET, displayCount+Math.ceil(TARGET/140));
+    const fmt = displayCount>=1000000 ? (displayCount/1000000).toFixed(1)+'M' : (displayCount/1000).toFixed(0)+'K';
+    document.getElementById('cnum').textContent=fmt;
+  } else {
+    document.getElementById('cnum').textContent='4.6M';
+  }
+}
+
+let lastP=0;
+function spawnPulse(now){
+  if(now-lastP<155) return; lastP=now;
+  const chains=[
+    ['prov','agro'],
+    ['prov','dist'],['prov','dist'],
+    ['dist','asesor'],['dist','asesor'],
+    ['dist','dealer'],['dist','dealer'],
+    ['dist','agr'],
+    ['asesor','alto'],['asesor','alto'],
+    ['asesor','agr'],
+    ['dealer','agr'],['dealer','agr'],
+  ];
+  const pick=chains[Math.floor(Math.random()*chains.length)];
+  const srcs=byType(pick[0]), tgts=byType(pick[1]);
+  if(!srcs.length||!tgts.length) return;
+  const s=srcs[Math.floor(Math.random()*srcs.length)];
+  const g=tgts[Math.floor(Math.random()*tgts.length)];
+  pulses.push({x0:s.x,y0:s.y,x1:g.x,y1:g.y,t:0,col:s.def.col});
+}
+
+c.addEventListener('mousemove',e=>{
+  const mx=e.clientX,my=e.clientY; let hov=null;
+  nodes.forEach(n=>{ n.hov=Math.hypot(n.x-mx,n.y-my)<n.def.r+10; if(n.hov) hov=n; });
+  if(hov){
+    tip.style.opacity='1'; tip.style.left=(e.clientX+18)+'px'; tip.style.top=(e.clientY-10)+'px';
+    tip.innerHTML=`<b>${hov.def.label}${hov.def.sublabel?' '+hov.def.sublabel:''}</b>${hov.def.desc}`;
+    c.style.cursor='pointer';
+  } else { tip.style.opacity='0'; c.style.cursor='default'; }
+});
+c.addEventListener('mouseleave',()=>{ nodes.forEach(n=>n.hov=false); tip.style.opacity='0'; });
+
+function loop(now){
+  requestAnimationFrame(loop); t+=0.012;
+  drawBg(); drawEdges(); drawPulses(); drawNodes(); drawRowLabels(); drawSellLabels(); updateCounter(); spawnPulse(now);
+}
+
+window.addEventListener('resize',build);
+build();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
